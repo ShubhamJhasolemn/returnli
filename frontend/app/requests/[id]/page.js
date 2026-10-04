@@ -214,6 +214,8 @@ export default function RequestDetailPage() {
           <div className="text-xs text-slate-500">SKU {request.item.sku}</div>
         </Field>
         <Field label="Quantity">{request.quantity} of {request.item.quantityOrdered} ordered</Field>
+        <Field label="Unit price">₹{request.item.unitPrice}</Field>
+        <Field label="Line value">₹{(Number(request.item.unitPrice) * request.quantity).toFixed(2)}</Field>
         <Field label="Reason">{formatWords(request.reason)}</Field>
         <Field label="Resolution">{request.resolution ? formatWords(request.resolution) : '—'}</Field>
         <Field label="Refund amount">{request.refundAmount ? `₹${request.refundAmount}` : '—'}</Field>
