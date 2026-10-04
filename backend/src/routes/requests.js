@@ -4,9 +4,106 @@ import { asyncHandler } from '../lib/asyncHandler.js'
 import { pool } from '../db/pool.js'
 import { notFound, unprocessable } from '../lib/errors.js'
 import { validate } from '../lib/validate.js'
-import { createRequestSchema } from '../schemas/requests.js'
+import { createRequestSchema, listRequestsSchema } from '../schemas/requests.js'
 
 export const requestsRouter = express.Router()
+
+// Whitelist of sortable columns. Column names and ASC/DESC CANNOT be passed as
+// SQL parameters, so they must come from a trusted map — never raw user input.
+const SORT_COLUMNS = {
+    created_at: 'r.created_at',
+    updated_at: 'r.updated_at',
+    reference: 'r.reference',
+    status: 'r.status',
+  }
+  
+  // GET /api/requests — search + filter + sort + paginate, entirely in SQL.
+  requestsRouter.get(
+    '/',
+    asyncHandler(async (req, res) => {
+      const filters = validate(listRequestsSchema, req.query)
+  
+      // Build the WHERE clause dynamically. VALUES always go through $ params
+      // (injection-safe); only the clause STRUCTURE is assembled in JS.
+      const where = ['r.removed_at IS NULL'] // never show removed requests
+      const params = []
+  
+      if (filters.status) {
+        params.push(filters.status)
+        where.push(`r.status = $${params.length}`)
+      }
+      if (filters.reason) {
+        params.push(filters.reason)
+        where.push(`r.reason = $${params.length}`)
+      }
+      if (filters.q) {
+        params.push(`%${filters.q}%`)
+        const i = params.length
+        where.push(
+          `(r.reference ILIKE $${i} OR o.reference ILIKE $${i} OR c.name ILIKE $${i} OR c.email ILIKE $${i})`,
+        )
+      }
+      const whereSql = where.join(' AND ')
+  
+      const sortCol = SORT_COLUMNS[filters.sort] // safe: validated enum -> trusted map
+      const sortDir = filters.order === 'asc' ? 'ASC' : 'DESC'
+  
+      // 1) total matches (same WHERE, no paging) — for pagination metadata.
+      const countResult = await pool.query(
+        `SELECT COUNT(*) AS total
+         FROM return_requests r
+         JOIN orders o    ON o.id = r.order_id
+         JOIN customers c ON c.id = o.customer_id
+         WHERE ${whereSql}`,
+        params,
+      )
+      const total = Number(countResult.rows[0].total)
+  
+      // 2) the page itself.
+      const limit = filters.pageSize
+      const offset = (filters.page - 1) * filters.pageSize
+      const pageResult = await pool.query(
+        `SELECT r.id, r.reference, r.quantity, r.reason, r.status, r.resolution, r.refund_amount,
+                r.created_at, r.updated_at,
+                o.reference AS order_reference,
+                c.name AS customer_name, c.email AS customer_email,
+                oi.product_name
+         FROM return_requests r
+         JOIN orders o       ON o.id = r.order_id
+         JOIN customers c    ON c.id = o.customer_id
+         JOIN order_items oi ON oi.id = r.order_item_id
+         WHERE ${whereSql}
+         ORDER BY ${sortCol} ${sortDir}, r.id ${sortDir}
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset],
+      )
+  
+      const data = pageResult.rows.map((r) => ({
+        id: r.id,
+        reference: r.reference,
+        status: r.status,
+        reason: r.reason,
+        quantity: r.quantity,
+        resolution: r.resolution,
+        refundAmount: r.refund_amount,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        order: { reference: r.order_reference },
+        customer: { name: r.customer_name, email: r.customer_email },
+        item: { productName: r.product_name },
+      }))
+  
+      res.json({
+        data,
+        pagination: {
+          page: filters.page,
+          pageSize: filters.pageSize,
+          total,
+          totalPages: Math.ceil(total / filters.pageSize),
+        },
+      })
+    }),
+  )
 
 // Fetch one request with order + customer + item + notes. Returns null if the
 // request doesn't exist or has been removed (removed rows can no longer be fetched).
