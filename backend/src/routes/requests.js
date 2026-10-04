@@ -11,6 +11,7 @@ import {
   listRequestsSchema,
   transitionSchema,
   updateRequestSchema,
+  createNoteSchema,
 } from '../schemas/requests.js'
 
 export const requestsRouter = express.Router()
@@ -351,3 +352,20 @@ requestsRouter.get(
     res.json({ data: detail })
   }),
 )
+
+// POST /api/requests/:id/notes — append a note (never edited/deleted; any status).
+requestsRouter.post(
+    '/:id/notes',
+    asyncHandler(async (req, res) => {
+      const id = parseId(req.params.id)
+      const { body, author } = validate(createNoteSchema, req.body)
+      await getRequestStatusOr404(id) // must exist and not be removed
+  
+      await pool.query(
+        `INSERT INTO return_notes (request_id, body, author) VALUES ($1, $2, $3)`,
+        [id, body, author ?? null],
+      )
+  
+      res.status(201).json({ data: await getRequestDetail(id) })
+    }),
+  )

@@ -36,3 +36,8 @@ export const transitionSchema = z.object({
     .refine((d) => d.quantity !== undefined || d.reason !== undefined, {
       message: 'Provide at least one field to update (quantity or reason).',
     })
+
+    export const createNoteSchema = z.object({
+        body: z.string().trim().min(1),
+        author: z.string().trim().min(1).optional(),
+      })
