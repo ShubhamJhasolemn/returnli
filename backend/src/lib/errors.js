@@ -19,3 +19,29 @@ export class AppError extends Error {
   export const notFound     = (message = 'Resource not found.', details) => new AppError('NOT_FOUND', message, 404, details)
   // All our state-conflict errors are 409 but with different codes, so this takes the code.
   export const conflict     = (code, message, details) => new AppError(code, message, 409, details)
+
+
+// Express error-handling middleware. Express identifies it by its FOUR args,
+// so `next` must stay in the signature even though it's unused.
+// Must be registered LAST, after all routes.
+export function errorHandler(err, req, res, next) {
+    // Map our DB-level duplicate guard (Rule 3) to a clean 409.
+    if (err?.code === '23505' && err.constraint === 'one_live_request_per_item') {
+      err = conflict('DUPLICATE_LIVE_REQUEST', 'A live return request already exists for this order item.')
+    }
+  
+    // Our own expected errors: respond in the standard envelope.
+    if (err instanceof AppError) {
+      return res.status(err.status).json({
+        error: {
+          code: err.code,
+          message: err.message,
+          ...(err.details ? { details: err.details } : {}),
+        },
+      })
+    }
+  
+    // Anything else is unexpected: log it, return a generic 500 (never leak internals).
+    console.error('Unexpected error:', err)
+    return res.status(500).json({ error: { code: 'INTERNAL', message: 'Something went wrong.' } })
+  }
