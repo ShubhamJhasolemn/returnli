@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 import useSWR from 'swr'
 
 import { StatusBadge } from '@/components/StatusBadge'
 import { apiFetch } from '@/lib/api'
 import { useDebounce } from '@/lib/useDebounce'
+import { ListSkeleton } from '@/components/Skeleton'
 
 const STATUSES = [
   { value: '', label: 'All statuses' },
@@ -33,64 +35,77 @@ function formatReason(reason) {
   return reason.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
 }
 
-export default function RequestsPage() {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
-  const [reason, setReason] = useState('')
-  const [sortOrder, setSortOrder] = useState('created_at:desc')
-  const [page, setPage] = useState(1)
+function RequestsList() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
+  // The URL query string is the source of truth for filters.
+  const status = searchParams.get('status') ?? ''
+  const reason = searchParams.get('reason') ?? ''
+  const sortOrder = searchParams.get('sort') ?? 'created_at:desc'
+  const page = Number(searchParams.get('page') ?? '1')
+  const qParam = searchParams.get('q') ?? ''
+
+  // Search box keeps local state (instant typing + debounce), seeded from the URL.
+  const [search, setSearch] = useState(qParam)
   const debouncedSearch = useDebounce(search, 300)
+
+  // Merge updates into the URL (empty values are removed). replace() = no history spam.
+  function setParams(updates) {
+    const params = new URLSearchParams(searchParams.toString())
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === '' || v == null) params.delete(k)
+      else params.set(k, String(v))
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
+
+  // When the debounced search settles, write it to the URL (reset to page 1).
+  useEffect(() => {
+    if (debouncedSearch !== qParam) setParams({ q: debouncedSearch, page: 1 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch])
+
   const [sort, order] = sortOrder.split(':')
+  const apiParams = new URLSearchParams()
+  if (debouncedSearch) apiParams.set('q', debouncedSearch)
+  if (status) apiParams.set('status', status)
+  if (reason) apiParams.set('reason', reason)
+  apiParams.set('sort', sort)
+  apiParams.set('order', order)
+  apiParams.set('page', String(page))
+  apiParams.set('pageSize', String(PAGE_SIZE))
 
-  const params = new URLSearchParams()
-  if (debouncedSearch) params.set('q', debouncedSearch)
-  if (status) params.set('status', status)
-  if (reason) params.set('reason', reason)
-  params.set('sort', sort)
-  params.set('order', order)
-  params.set('page', String(page))
-  params.set('pageSize', String(PAGE_SIZE))
-
-  const { data, error, isLoading } = useSWR(`/api/requests?${params.toString()}`, apiFetch, {
+  const { data, error, isLoading } = useSWR(`/api/requests?${apiParams.toString()}`, apiFetch, {
     keepPreviousData: true,
   })
-
   const requests = data?.data ?? []
   const pagination = data?.pagination
 
-  function onFilter(setter, value) {
-    setter(value)
-    setPage(1)
-  }
   function goToPage(next) {
-    setPage(next)
+    setParams({ page: next })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-100">Return requests</h1>
-        <Link href="/requests/new" className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
-          + New request
-        </Link>
-      </div>
+      <h1 className="text-2xl font-semibold text-slate-100">Return requests</h1>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <input
           value={search}
-          onChange={(e) => onFilter(setSearch, e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Search customer, order or reference…"
           className={`${inputClass} w-full sm:w-72`}
         />
-        <select value={status} onChange={(e) => onFilter(setStatus, e.target.value)} className={inputClass}>
+        <select value={status} onChange={(e) => setParams({ status: e.target.value, page: 1 })} className={inputClass}>
           {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
-        <select value={reason} onChange={(e) => onFilter(setReason, e.target.value)} className={inputClass}>
+        <select value={reason} onChange={(e) => setParams({ reason: e.target.value, page: 1 })} className={inputClass}>
           {REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
-        <select value={sortOrder} onChange={(e) => onFilter(setSortOrder, e.target.value)} className={inputClass}>
+        <select value={sortOrder} onChange={(e) => setParams({ sort: e.target.value, page: 1 })} className={inputClass}>
           <option value="created_at:desc">Newest first</option>
           <option value="created_at:asc">Oldest first</option>
           <option value="reference:asc">Reference A→Z</option>
@@ -103,7 +118,7 @@ export default function RequestsPage() {
           Couldn’t load requests: {error.message}
         </div>
       ) : isLoading && !data ? (
-        <div className="mt-10 text-center text-slate-400">Loading requests…</div>
+        <ListSkeleton />
       ) : requests.length === 0 ? (
         <div className="mt-10 rounded-lg border border-dashed border-slate-700 p-10 text-center text-slate-400">
           No requests match your filters.
@@ -153,5 +168,13 @@ export default function RequestsPage() {
         </>
       )}
     </main>
+  )
+}
+
+export default function RequestsPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-5xl px-4 py-8 text-center text-slate-400">Loading…</div>}>
+      <RequestsList />
+    </Suspense>
   )
 }

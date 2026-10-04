@@ -7,6 +7,7 @@ import useSWR from 'swr'
 
 import { StatusBadge } from '@/components/StatusBadge'
 import { apiFetch } from '@/lib/api'
+import { DetailSkeleton } from '@/components/Skeleton'
 
 // Client mirror of the server's transition map — decides which action buttons
 // to SHOW. The server still enforces legality; this is just UI.
@@ -177,7 +178,7 @@ export default function RequestDetailPage() {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
         <BackLink />
-        <div className="mt-6 text-center text-slate-400">Loading…</div>
+        <DetailSkeleton />
       </main>
     )
   }
