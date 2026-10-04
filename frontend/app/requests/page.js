@@ -9,6 +9,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { apiFetch } from '@/lib/api'
 import { useDebounce } from '@/lib/useDebounce'
 import { ListSkeleton } from '@/components/Skeleton'
+import { Inbox } from 'lucide-react'
 
 const STATUSES = [
   { value: '', label: 'All statuses' },
@@ -114,18 +115,19 @@ function RequestsList() {
       </div>
 
       {error ? (
-        <div className="mt-10 rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
+        <div className="mt-10 rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
           Couldn’t load requests: {error.message}
         </div>
       ) : isLoading && !data ? (
         <ListSkeleton />
       ) : requests.length === 0 ? (
-        <div className="mt-10 rounded-lg border border-dashed border-slate-700 p-10 text-center text-slate-400">
-          No requests match your filters.
+        <div className="mt-10 flex flex-col items-center gap-2 rounded-xl border border-dashed border-slate-700 py-16 text-center">
+          <Inbox className="h-8 w-8 text-slate-600" />
+          <p className="text-slate-400">No requests match your filters.</p>
         </div>
       ) : (
         <>
-          <div className="mt-6 overflow-hidden rounded-lg border border-slate-800">
+          <div className="mt-6 overflow-hidden rounded-xl border border-slate-800">
             <div className="hidden grid-cols-12 gap-2 bg-slate-900/60 px-4 py-2 text-xs font-medium uppercase tracking-wide text-slate-400 md:grid">
               <div className="col-span-2">Reference</div>
               <div className="col-span-3">Customer</div>

@@ -8,6 +8,7 @@ import useSWR from 'swr'
 import { StatusBadge } from '@/components/StatusBadge'
 import { apiFetch } from '@/lib/api'
 import { DetailSkeleton } from '@/components/Skeleton'
+import { StickyNote } from 'lucide-react'
 
 // Client mirror of the server's transition map — decides which action buttons
 // to SHOW. The server still enforces legality; this is just UI.
@@ -166,7 +167,7 @@ export default function RequestDetailPage() {
     return (
       <main className="mx-auto max-w-3xl px-4 py-8">
         <BackLink />
-        <div className="mt-6 rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
+        <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-300">
           {error.status === 404
             ? 'This request was not found (it may have been removed).'
             : `Couldn’t load request: ${error.message}`}
@@ -202,7 +203,7 @@ export default function RequestDetailPage() {
         </div>
       )}
 
-      <section className="mt-6 grid grid-cols-1 gap-4 rounded-lg border border-slate-800 bg-slate-900 p-5 sm:grid-cols-2">
+      <section className="mt-6 grid grid-cols-1 gap-4 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-2">
         <Field label="Customer">
           {request.customer.name}
           <div className="text-xs text-slate-500">
@@ -238,7 +239,7 @@ export default function RequestDetailPage() {
       </section>
 
       {showApprove && (
-        <form onSubmit={submitApprove} className="mt-4 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <form onSubmit={submitApprove} className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
           <h3 className="text-sm font-medium text-slate-200">Approve request</h3>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <select value={resolution} onChange={(e) => setResolution(e.target.value)} className={inputClass}>
@@ -258,7 +259,7 @@ export default function RequestDetailPage() {
       )}
 
       {showEdit && (
-        <form onSubmit={submitEdit} className="mt-4 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <form onSubmit={submitEdit} className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
           <h3 className="text-sm font-medium text-slate-200">Edit details</h3>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <input
@@ -275,9 +276,11 @@ export default function RequestDetailPage() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-slate-100">Notes</h2>
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-100">
+          <StickyNote className="h-5 w-5 text-slate-400" /> Notes
+        </h2>
 
-        <form onSubmit={submitNote} className="mt-3 rounded-lg border border-slate-800 bg-slate-900 p-4">
+        <form onSubmit={submitNote} className="mt-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
           <textarea
             value={noteBody} onChange={(e) => setNoteBody(e.target.value)}
             placeholder="Add a note…" rows={3}
@@ -292,7 +295,7 @@ export default function RequestDetailPage() {
         <ul className="mt-4 space-y-3">
           {request.notes.length === 0 && <li className="text-sm text-slate-500">No notes yet.</li>}
           {request.notes.map((n) => (
-            <li key={n.id} className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+            <li key={n.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4">
               <div className="whitespace-pre-wrap text-sm text-slate-200">{n.body}</div>
               <div className="mt-2 text-xs text-slate-500">{n.author ?? 'Unknown'} · {formatDate(n.createdAt)}</div>
             </li>

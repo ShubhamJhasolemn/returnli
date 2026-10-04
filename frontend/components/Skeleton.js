@@ -4,7 +4,7 @@ function Bar({ className = '' }) {
   
   export function ListSkeleton() {
     return (
-      <div className="mt-6 overflow-hidden rounded-lg border border-slate-800">
+      <div className="mt-6 overflow-hidden rounded-xl border border-slate-800">
         <ul className="divide-y divide-slate-800">
           {Array.from({ length: 6 }).map((_, i) => (
             <li key={i} className="px-4 py-4">
@@ -29,7 +29,7 @@ function Bar({ className = '' }) {
   export function DetailSkeleton() {
     return (
       <div className="mt-6 space-y-6">
-        <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-800 bg-slate-900 p-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-800 bg-slate-900 p-5 sm:grid-cols-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i}>
               <Bar className="h-3 w-20" />

@@ -2,8 +2,9 @@ import cors from 'cors'
 import express from 'express'
 import { ordersRouter } from './routes/orders.js'
 import { requestsRouter } from './routes/requests.js'
-
+import { statsRouter } from './routes/stats.js'
 import { errorHandler, notFound } from './lib/errors.js'
+
 
 // Builds the Express app WITHOUT starting it, so tests can import it directly.
 export function createApp() {
@@ -22,7 +23,7 @@ export function createApp() {
    // app.use('/api/orders', ordersRouter)
   app.use('/api/orders', ordersRouter)
   app.use('/api/requests', requestsRouter)
-
+  app.use('/api/stats', statsRouter)
   // Any unmatched route -> 404 in our standard envelope.
   app.use((req, res, next) => {
     next(notFound(`Route ${req.method} ${req.path} not found.`))
