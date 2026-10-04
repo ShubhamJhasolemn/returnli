@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { STATUSES } from '../domain/status.js'
+import { RESOLUTIONS } from '../domain/rules.js'
 
 export const REASONS = ['damaged', 'wrong_item', 'size_issue', 'not_as_described', 'changed_mind']
 
@@ -20,3 +21,18 @@ export const listRequestsSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 })
+
+export const transitionSchema = z.object({
+    to: z.enum(STATUSES),
+    resolution: z.enum(RESOLUTIONS).optional(),
+    refundAmount: z.coerce.number().optional(), // domain layer enforces > 0 for refunds
+  })
+  
+  export const updateRequestSchema = z
+    .object({
+      quantity: z.coerce.number().int().positive().optional(),
+      reason: z.enum(REASONS).optional(),
+    })
+    .refine((d) => d.quantity !== undefined || d.reason !== undefined, {
+      message: 'Provide at least one field to update (quantity or reason).',
+    })

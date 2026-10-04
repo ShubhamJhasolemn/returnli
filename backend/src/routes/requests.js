@@ -4,7 +4,14 @@ import { asyncHandler } from '../lib/asyncHandler.js'
 import { pool } from '../db/pool.js'
 import { notFound, unprocessable } from '../lib/errors.js'
 import { validate } from '../lib/validate.js'
-import { createRequestSchema, listRequestsSchema } from '../schemas/requests.js'
+import { assertTransition } from '../domain/status.js'
+import { assertEditable, assertRemovable, validateApproval } from '../domain/rules.js'
+import {
+  createRequestSchema,
+  listRequestsSchema,
+  transitionSchema,
+  updateRequestSchema,
+} from '../schemas/requests.js'
 
 export const requestsRouter = express.Router()
 
@@ -104,6 +111,129 @@ const SORT_COLUMNS = {
       })
     }),
   )
+
+// Actions address a request by numeric id; reject anything else as not found.
+function parseId(raw) {
+    const id = Number(raw)
+    if (!Number.isInteger(id) || id <= 0) {
+      throw notFound(`Return request "${raw}" not found.`)
+    }
+    return id
+  }
+  
+  // Load just the current status (and confirm it exists / isn't removed).
+  async function getRequestStatusOr404(id) {
+    const { rows } = await pool.query(
+      `SELECT id, status FROM return_requests WHERE id = $1 AND removed_at IS NULL`,
+      [id],
+    )
+    if (!rows[0]) throw notFound(`Return request ${id} not found.`)
+    return rows[0]
+  }
+
+// POST /api/requests/:id/transition — move a request through its lifecycle.
+requestsRouter.post(
+    '/:id/transition',
+    asyncHandler(async (req, res) => {
+      const id = parseId(req.params.id)
+      const body = validate(transitionSchema, req.body)
+      const current = await getRequestStatusOr404(id)
+  
+      assertTransition(current.status, body.to) // Rule 1
+  
+      let resolution = null
+      let refundAmount = null
+      if (body.to === 'approved') {
+        // Rule 2: approval needs a valid resolution (+ refund amount rules).
+        const approved = validateApproval({
+          resolution: body.resolution,
+          refundAmount: body.refundAmount,
+        })
+        resolution = approved.resolution
+        refundAmount = approved.refundAmount
+      }
+  
+      const decided = body.to !== 'open' && body.to !== 'in_review'
+  
+      await pool.query(
+        `UPDATE return_requests
+            SET status        = $1,
+                resolution    = CASE WHEN $1 = 'approved' THEN $2 ELSE resolution END,
+                refund_amount = CASE WHEN $1 = 'approved' THEN $3 ELSE refund_amount END,
+                decided_at    = CASE WHEN $4 THEN COALESCE(decided_at, now()) ELSE decided_at END,
+                updated_at    = now()
+          WHERE id = $5`,
+        [body.to, resolution, refundAmount, decided, id],
+      )
+  
+      res.json({ data: await getRequestDetail(id) })
+    }),
+  )
+  
+  // PATCH /api/requests/:id — correct details, only before a decision.
+  requestsRouter.patch(
+    '/:id',
+    asyncHandler(async (req, res) => {
+      const id = parseId(req.params.id)
+      const body = validate(updateRequestSchema, req.body)
+      const current = await getRequestStatusOr404(id)
+  
+      assertEditable(current.status) // Rule 4
+  
+      // If quantity changes, re-check it against what was ordered.
+      if (body.quantity !== undefined) {
+        const { rows } = await pool.query(
+          `SELECT oi.quantity_ordered
+           FROM return_requests r JOIN order_items oi ON oi.id = r.order_item_id
+           WHERE r.id = $1`,
+          [id],
+        )
+        if (body.quantity > rows[0].quantity_ordered) {
+          throw unprocessable('Return quantity cannot exceed the quantity ordered.', {
+            quantity: body.quantity,
+            quantityOrdered: rows[0].quantity_ordered,
+          })
+        }
+      }
+  
+      // Build the SET clause from only the provided fields.
+      const set = []
+      const params = []
+      if (body.quantity !== undefined) {
+        params.push(body.quantity)
+        set.push(`quantity = $${params.length}`)
+      }
+      if (body.reason !== undefined) {
+        params.push(body.reason)
+        set.push(`reason = $${params.length}`)
+      }
+      set.push('updated_at = now()')
+      params.push(id)
+  
+      await pool.query(`UPDATE return_requests SET ${set.join(', ')} WHERE id = $${params.length}`, params)
+  
+      res.json({ data: await getRequestDetail(id) })
+    }),
+  )
+  
+  // DELETE /api/requests/:id — soft remove (record survives).
+  requestsRouter.delete(
+    '/:id',
+    asyncHandler(async (req, res) => {
+      const id = parseId(req.params.id)
+      const current = await getRequestStatusOr404(id)
+  
+      assertRemovable(current.status) // Rule 5
+  
+      await pool.query(
+        `UPDATE return_requests SET removed_at = now(), updated_at = now() WHERE id = $1`,
+        [id],
+      )
+  
+      res.status(204).send() // 204 No Content — success, nothing to return
+    }),
+  )
+
 
 // Fetch one request with order + customer + item + notes. Returns null if the
 // request doesn't exist or has been removed (removed rows can no longer be fetched).
