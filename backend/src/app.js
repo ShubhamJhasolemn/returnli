@@ -1,6 +1,7 @@
 import cors from 'cors'
 import express from 'express'
 import { ordersRouter } from './routes/orders.js'
+import { requestsRouter } from './routes/requests.js'
 
 import { errorHandler, notFound } from './lib/errors.js'
 
@@ -20,8 +21,7 @@ export function createApp() {
   // --- routes ---
    // app.use('/api/orders', ordersRouter)
   app.use('/api/orders', ordersRouter)
-  // (requestsRouter comes in 4c)
-  // app.use('/api/requests', requestsRouter)
+  app.use('/api/requests', requestsRouter)
 
   // Any unmatched route -> 404 in our standard envelope.
   app.use((req, res, next) => {

@@ -29,7 +29,13 @@ export function errorHandler(err, req, res, next) {
     if (err?.code === '23505' && err.constraint === 'one_live_request_per_item') {
       err = conflict('DUPLICATE_LIVE_REQUEST', 'A live return request already exists for this order item.')
     }
-  
+    // Malformed JSON body (thrown by express.json()) is a client error, not a
+    // server fault — report 400 instead of falling through to the generic 500.
+    if (err?.type === 'entity.parse.failed') {
+        return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'Request body is not valid JSON.' },
+        })
+    }
     // Our own expected errors: respond in the standard envelope.
     if (err instanceof AppError) {
       return res.status(err.status).json({
